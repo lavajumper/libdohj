@@ -21,6 +21,7 @@ package org.bitcoinj.core;
 import org.libdohj.core.AuxPoWNetworkParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.spongycastle.util.encoders.Hex;
 
 import javax.annotation.Nullable;
 import java.io.*;
@@ -123,6 +124,7 @@ public class AuxPoW extends ChildMessage {
     protected void parse() throws ProtocolException {
         cursor = offset;
         transaction = new Transaction(params, payload, cursor, this, serializer, Message.UNKNOWN_LENGTH);
+
         cursor += transaction.getOptimalEncodingMessageSize();
         optimalEncodingMessageSize = transaction.getOptimalEncodingMessageSize();        
 

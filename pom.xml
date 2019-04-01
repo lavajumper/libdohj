@@ -157,6 +157,11 @@
             <scope>runtime</scope>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <groupId>net.sf.jopt-simple</groupId>
+            <artifactId>jopt-simple</artifactId>
+            <version>4.3</version>
+        </dependency>
     </dependencies>
 
     <prerequisites>
@@ -172,7 +177,7 @@
         <profile>
             <id>doclint-java8-disable</id>
             <activation>
-                <jdk>[1.8,)</jdk>
+                <jdk>[1.7,)</jdk>
             </activation>
             <build>
                 <plugins>

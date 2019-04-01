@@ -266,7 +266,7 @@ public class AltcoinBlock extends org.bitcoinj.core.Block {
     /** Returns true if the hash of the block is OK (lower than difficulty target). */
     protected boolean checkProofOfWork(boolean throwException) throws VerificationException {
         if (params instanceof AltcoinNetworkParameters) {
-            BigInteger target = getDifficultyTargetAsInteger();
+            BigInteger target = this.getDifficultyTargetAsInteger();
 
             if (params instanceof AuxPoWNetworkParameters) {
                 final AuxPoWNetworkParameters auxParams = (AuxPoWNetworkParameters)this.params;
@@ -302,6 +302,16 @@ public class AltcoinBlock extends org.bitcoinj.core.Block {
     @Override
     public void verifyHeader() throws VerificationException {
         super.verifyHeader();
+    }
+
+    @Override
+    public BigInteger getDifficultyTargetAsInteger() throws VerificationException {
+        BigInteger target = Utils.decodeCompactBits(getDifficultyTarget());
+        /*
+        if ( target.signum() <= 0 || target.compareTo(params.maxTarget) > 0)
+            throw new VerificationException("Difficulty target is bad: " + target.toString());
+        */
+        return target;
     }
 
     /**
