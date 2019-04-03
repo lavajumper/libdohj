@@ -17,6 +17,8 @@ import java.math.BigInteger;
 
 import static org.bitcoinj.core.Coin.COIN;
 
+import info.sexcoin.kgw;
+
 /**
  * Created by Lavajumper on 1/12/2019.
  */
@@ -474,6 +476,11 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
         long PastBlocksMin = (long) (PastSecondsMin / targetBlocksSpacingSeconds);
         long PastBlocksMax = PastSecondsMax / targetBlocksSpacingSeconds;
 
+        if(kgw.isNativeLibraryLoaded()){
+            //log.debug("Using KGW-native mode.");
+            return KimotoGravityWell_native(storedPrev, nextBlock, targetBlocksSpacingSeconds, PastBlocksMin, PastBlocksMax, blockStore);
+        }
+        //log.debug("Using java KGW calculations");
         return KimotoGravityWell(storedPrev, nextBlock, targetBlocksSpacingSeconds, PastBlocksMin, PastBlocksMax, blockStore);
     }
 
@@ -525,7 +532,7 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
                     LatestBlockTime = BlockReading.getHeader().getTimeSeconds();
             }
 
-            PastRateActualSeconds = BlockLastSolved.getHeader().getTimeSeconds() - BlockReading.getHeader().getTimeSeconds();
+            PastRateActualSeconds = LatestBlockTime - BlockReading.getHeader().getTimeSeconds();
             PastRateTargetSeconds = TargetBlocksSpacingSeconds * PastBlocksMass;
             PastRateAdjustmentRatio = 1.0f;
             if (BlockReading.getHeight() > SXC_KGW_FIX_HEIGHT) {
@@ -570,6 +577,8 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
             newDifficulty = getMaxTarget();
         }
 
+        verifyDifficulty(newDifficulty, nextBlock);
+
         long error = nextBlock.getDifficultyTarget() - Utils.encodeCompactBits(newDifficulty);
         if ( error < 5000 && error > 0  ){
             log.info( "Difficulty comparison appears to be rounding error: Block#: {}, error: {}, NEW:{}, BLOCK:{}",
@@ -586,6 +595,115 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
         return Utils.encodeCompactBits(newDifficulty);
 
     }
+
+    private long KimotoGravityWell_native(StoredBlock storedPrev, Block nextBlock, long TargetBlocksSpacingSeconds,
+                                          long PastBlocksMin, long PastBlocksMax, BlockStore blockStore )
+            throws BlockStoreException, VerificationException, CheckpointEncounteredException {
+        /* current difficulty formula, megacoin - kimoto gravity well */
+        StoredBlock         BlockLastSolved             = storedPrev;
+        StoredBlock         BlockReading                = storedPrev;
+        Block               BlockCreating               = nextBlock;
+
+        /**
+         * these are initialized in kgw_native
+         *
+        BlockCreating				= BlockCreating;
+        long				PastBlocksMass				= 0;
+        long				PastRateActualSeconds		= 0;
+        long				PastRateTargetSeconds		= 0;
+        double				PastRateAdjustmentRatio		= 1f;
+        BigInteger			PastDifficultyAverage = BigInteger.valueOf(0);
+        BigInteger			PastDifficultyAveragePrev = BigInteger.valueOf(0);;
+        double				EventHorizonDeviation;
+        double				EventHorizonDeviationFast;
+        double				EventHorizonDeviationSlow;
+        */
+        long start = System.currentTimeMillis();
+        long endLoop = 0;
+
+        if (BlockLastSolved == null || BlockLastSolved.getHeight() == 0 || (long)BlockLastSolved.getHeight() < PastBlocksMin){
+            // verifyDifficulty(maxTarget, nextBlock);
+            return Utils.encodeCompactBits(getMaxTarget());
+        }
+
+        int i = 0;
+        long LatestBlockTime = BlockLastSolved.getHeader().getTimeSeconds();
+        //log.info("KGW: i = {}; height = {}; hash {} ", i, BlockReading.getHeight(), BlockReading.getHeader().getHashAsString());
+
+        long totalCalcTime = 0;
+        long totalReadtime = 0;
+        long totalBigIntTime = 0;
+
+        int init_result = kgw.KimotoGravityWell_init(TargetBlocksSpacingSeconds, PastBlocksMin, PastBlocksMax, 144, SXC_KGW_FIX_HEIGHT, LatestBlockTime);
+
+
+        for (i = 1; BlockReading != null && BlockReading.getHeight() > 0; i++) {
+            long startLoop = System.currentTimeMillis();
+            int result = kgw.KimotoGravityWell_loop2(i, BlockReading.getHeader().getDifficultyTarget(),
+                    BlockReading.getHeight(),
+                    BlockReading.getHeader().getTimeSeconds(),
+                    BlockLastSolved.getHeader().getTimeSeconds());
+            BigInteger diff = BlockReading.getHeader().getDifficultyTargetAsInteger();
+            //if(i == 1)
+            //    log.info("KGW-N2: difficulty of i=1: " + BlockReading.getHeader().getDifficultyTarget() +"->"+ diff.toString(16));
+            if(result == 1) //STOP
+                break;
+            //if(result == 2) //EXIT ( this cannot happen )
+            //    return ;
+
+            long calcTime = System.currentTimeMillis();
+            StoredBlock BlockReadingPrev = blockStore.get(BlockReading.getHeader().getPrevBlockHash());
+            if (BlockReadingPrev == null)
+            {
+                //If this is triggered, then we are using checkpoints and haven't downloaded enough blocks to verify the difficulty.
+                throw new CheckpointEncounteredException();
+            }
+            //log.info("KGW: i = {}; height = {}; hash {} ", i, BlockReadingPrev.getHeight(), BlockReadingPrev.getHeader().getHashAsString());
+            BlockReading = BlockReadingPrev;
+            endLoop = System.currentTimeMillis();
+            //log.info("KGW-N: i = {}; height = {}; total time {}=calc {}+read {}", i, BlockReadingPrev.getHeight(), endLoop - startLoop, calcTime - startLoop, endLoop-calcTime);
+            totalCalcTime += calcTime - startLoop;
+            totalReadtime += endLoop-calcTime;
+        }
+
+        BigInteger newDifficulty = new BigInteger(kgw.KimotoGravityWell_close());
+
+        if (newDifficulty.compareTo(getMaxTarget()) > 0) {
+            log.info("Difficulty hit proof of work limit: {}", newDifficulty.toString(16));
+            newDifficulty = getMaxTarget();
+        }
+
+        return Utils.encodeCompactBits(newDifficulty);
+
+        /*
+        if(!verifyDifficulty(newDifficulty, nextBlock)) {
+            return Utils.encodeCompactBits(newDifficulty);
+        }*/
+
+
+    }
+
+    private boolean verifyDifficulty(BigInteger calcDiff, Block nextBlock)
+    {
+        if (calcDiff.compareTo(getMaxTarget()) > 0) {
+            log.info("verifyDifficulty: Difficulty hit proof of work limit: {}", calcDiff.toString(16));
+            calcDiff = getMaxTarget();
+        }
+        int accuracyBytes = (int) (nextBlock.getDifficultyTarget() >>> 24) - 3;
+        BigInteger receivedDifficulty = nextBlock.getDifficultyTargetAsInteger();
+
+        // The calculated difficulty is to a higher precision than received, so reduce here.
+        BigInteger mask = BigInteger.valueOf(0xFFFFFFL).shiftLeft(accuracyBytes * 8);
+        calcDiff = calcDiff.and(mask);
+
+        if (calcDiff.compareTo(receivedDifficulty) != 0)
+            return false;
+
+        return true;
+            //throw new VerificationException("Network provided difficulty bits do not match what was calculated: " +
+            //        receivedDifficulty.toString(16) + " vs " + calcDiff.toString(16));
+    }
+
 
     private static class CheckpointEncounteredException extends Exception {
 

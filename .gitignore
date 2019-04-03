@@ -1,5 +1,8 @@
 core/target
+core/src/main/resources/lib/*
 namecoin/target
+jni/target
+tools/target
 .project
 .classpath
 .settings
@@ -10,3 +13,4 @@ namecoin/target
 *.wallet
 /nbproject/private/
 /build/
+obj
