@@ -1,5 +1,5 @@
 core/target
-core/src/main/resources/lib/*
+core/src/main/resources/libs/*
 namecoin/target
 jni/target
 tools/target
