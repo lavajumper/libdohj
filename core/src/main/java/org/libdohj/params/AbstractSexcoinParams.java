@@ -445,14 +445,14 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
         } else if ( height >= SXC_KGW_HEIGHT && height < SXC_KGW_FIX_HEIGHT ){
             return SXC_TARGET_SPACING_KGW;
         }
-        return 1; // sexcoin: after KGW we retargeted every block
+        return 1; // sexcoin: after KGW we retarget every block
     }
 
     /**
      * Set up KGW params for Sexcoin.
-     * KGW is proving to be very problematic. ATM our theory is that there are some rounding errors in the
+     * KGW is proving to be very problematic. ATM our theory is that there are some precision errors in the
      * calculated targets in java because of the use of doubles in the calculations. If this is not true, then
-     * someone figured out at way to sneak low difficulty blocks onto the blockchain, which is also
+     * someone figured out at way to sneak low(er) difficulty blocks onto the blockchain, which is also
      * problematic.
      */
 
@@ -463,7 +463,7 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
          * Sexcoin switched to retargeting every block at the KGW fix. Don't do this when initially syncing
          * the blockchain, instead only check a block at two week intervals. Return the difficulty target
          * for the current block to insure that they will pass the POW checks that are called from the validation
-         * methods. KGW is a very expensive routine.
+         * methods. Java-KGW is a _very_ expensive routine.
          */
         if( (storedPrev.getHeight()+1 < 3192088/*SXC_AUXPOW_HEIGHT*/ ) && (storedPrev.getHeight()+1 % 20160 != 0) )
             return(nextBlock.getDifficultyTarget());
@@ -476,10 +476,13 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
         long PastBlocksMin = (long) (PastSecondsMin / targetBlocksSpacingSeconds);
         long PastBlocksMax = PastSecondsMax / targetBlocksSpacingSeconds;
 
+        /* Native code needs work
         if(kgw.isNativeLibraryLoaded()){
             //log.debug("Using KGW-native mode.");
             return KimotoGravityWell_native(storedPrev, nextBlock, targetBlocksSpacingSeconds, PastBlocksMin, PastBlocksMax, blockStore);
         }
+
+        */
         //log.debug("Using java KGW calculations");
         return KimotoGravityWell(storedPrev, nextBlock, targetBlocksSpacingSeconds, PastBlocksMin, PastBlocksMax, blockStore);
     }
@@ -579,9 +582,10 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
 
         verifyDifficulty(newDifficulty, nextBlock);
 
+        // TODO: fold in verifyDifficulty() to account for precision errors
         long error = nextBlock.getDifficultyTarget() - Utils.encodeCompactBits(newDifficulty);
         if ( error < 5000 && error > 0  ){
-            log.info( "Difficulty comparison appears to be rounding error: Block#: {}, error: {}, NEW:{}, BLOCK:{}",
+            log.info( "Difficulty comparison appears to be precision error: Block#: {}, error: {}, NEW:{}, BLOCK:{}",
                     storedPrev.getHeight() + 1,
                     error,
                     Utils.encodeCompactBits(newDifficulty),
@@ -595,6 +599,7 @@ public abstract class AbstractSexcoinParams extends NetworkParameters implements
         return Utils.encodeCompactBits(newDifficulty);
 
     }
+
 
     private long KimotoGravityWell_native(StoredBlock storedPrev, Block nextBlock, long TargetBlocksSpacingSeconds,
                                           long PastBlocksMin, long PastBlocksMax, BlockStore blockStore )
